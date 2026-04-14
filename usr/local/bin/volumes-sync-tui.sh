@@ -17,7 +17,8 @@ TMPLOG=$(mktemp)
 TMPSCRIPT=$(mktemp --suffix=.sh)
 TMPVOL_ORIG=$(mktemp)
 TMPVOL_DEST=$(mktemp)
-trap "rm -f $TMPLOG $TMPSCRIPT $TMPVOL_ORIG $TMPVOL_DEST" EXIT
+TMPERR=$(mktemp)
+trap "rm -f $TMPLOG $TMPSCRIPT $TMPVOL_ORIG $TMPVOL_DEST $TMPERR" EXIT
 
 [ -n "${DRY_RUN+x}" ] && DRY_RUN_ORIGINAL=$DRY_RUN
 DRY_RUN=${DRY_RUN:-true}
@@ -142,9 +143,20 @@ testar_conexao "$DESTINO" "Destino"
 echo ""
 set +e
 gum spin --spinner dot --title " Carregando volumes da origem..." -- \
-    bash -c "$DOCKER_ORIGEM volume ls --format '{{.Name}}' > '$TMPVOL_ORIG' 2>/dev/null"
+    bash -c "$DOCKER_ORIGEM volume ls --format '{{.Name}}' > '$TMPVOL_ORIG' 2>'$TMPERR'"
+if [ ! -s "$TMPVOL_ORIG" ] && [ -s "$TMPERR" ]; then
+    gum style --foreground "$C_ERR" "✗ Erro ao listar volumes da origem:"
+    gum style --foreground "$C_DIM" "$(cat "$TMPERR")"
+    echo "" && read -r -p "Pressione ENTER para sair..." && exit 1
+fi
+
 gum spin --spinner dot --title " Carregando volumes do destino..." -- \
-    bash -c "$DOCKER_DESTINO volume ls --format '{{.Name}}' > '$TMPVOL_DEST' 2>/dev/null"
+    bash -c "$DOCKER_DESTINO volume ls --format '{{.Name}}' > '$TMPVOL_DEST' 2>'$TMPERR'"
+if [ ! -s "$TMPVOL_DEST" ] && [ -s "$TMPERR" ]; then
+    gum style --foreground "$C_WARN" "⚠ Não foi possível listar volumes do destino:"
+    gum style --foreground "$C_DIM" "$(cat "$TMPERR")"
+fi
+
 VOLUMES_ORIGEM=($(cat "$TMPVOL_ORIG"))
 VOLUMES_DESTINO=($(cat "$TMPVOL_DEST"))
 set -e
