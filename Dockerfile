@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         rsync \
         openssh-client \
+        openssh-server \
         docker.io \
         curl \
         ca-certificates \

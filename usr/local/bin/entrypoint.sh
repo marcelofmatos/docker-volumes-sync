@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Modo servidor SSH
+if [ "$1" = "--server-mode" ]; then
+    exec /usr/local/bin/server-mode.sh
+fi
+
 # Configurar SSH se chave privada for fornecida
 if [ -n "$SSH_PRIVATE_KEY" ]; then
     mkdir -p /root/.ssh
