@@ -6,30 +6,121 @@ Scripts interativos para sincronizar e exportar volumes Docker entre servidores 
 
 | Script | Descrição |
 |--------|-----------|
-| `volumes-sync.sh` | Sincronização interativa via terminal (CLI colorido) |
+| `volumes-sync.sh` | Sincronização interativa via terminal (CLI colorido) — **padrão** |
 | `volumes-sync-tui.sh` | Sincronização com interface visual (dialog/whiptail) |
 | `volumes-export.sh` | Gera comandos de backup, restore e criação de volumes |
 
 ---
 
-## volumes-sync.sh
+## Uso com Docker
 
-Script interativo que lista volumes Docker de dois servidores e sincroniza os selecionados usando rsync.
+A imagem está disponível no GitHub Container Registry:
 
-### Instalação rápida
-
-```bash
-curl https://raw.githubusercontent.com/marcelofmatos/scripts/main/docker/volumes-sync.sh | bash
+```
+ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
-Ou baixar e executar:
+> O container é interativo — sempre use as flags `-it`.
+
+### Pull
 
 ```bash
-curl https://raw.githubusercontent.com/marcelofmatos/scripts/main/docker/volumes-sync.sh > volumes-sync.sh
-bash volumes-sync.sh
+docker pull ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
-### Variáveis de ambiente
+### volumes-sync.sh (padrão)
+
+```bash
+# Modo totalmente interativo
+docker run -it --rm \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -e SSH_CONFIG="$(cat ~/.ssh/config)" \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest
+
+# Definir servidores por variável de ambiente
+docker run -it --rm \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -e ORIGEM=usuario@azure \
+  -e DESTINO=usuario@hetzner \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest
+
+# Execução real (desativa dry-run)
+docker run -it --rm \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -e ORIGEM=usuario@azure \
+  -e DESTINO=usuario@hetzner \
+  -e DRY_RUN=false \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest
+```
+
+### volumes-sync-tui.sh
+
+```bash
+docker run -it --rm \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -e SSH_CONFIG="$(cat ~/.ssh/config)" \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest \
+  /usr/local/bin/volumes-sync-tui.sh
+```
+
+### volumes-export.sh
+
+```bash
+# Volumes de um servidor remoto
+docker run -it --rm \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest \
+  /usr/local/bin/volumes-export.sh usuario@servidor
+
+# Volumes do host local (requer socket Docker montado)
+docker run -it --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest \
+  /usr/local/bin/volumes-export.sh
+```
+
+### Acessando o host local como origem ou destino
+
+Quando `ORIGEM` ou `DESTINO` for o próprio host que executa o container, monte o socket Docker:
+
+```bash
+docker run -it --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -e ORIGEM=localhost \
+  -e DESTINO=usuario@hetzner \
+  -e USE_SUDO=false \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest
+```
+
+> Use `USE_SUDO=false` ao acessar Docker via socket — o container já tem permissão direta.
+
+### Alternativa: montar o diretório SSH
+
+Em vez de passar as chaves por variável de ambiente, monte `~/.ssh` diretamente:
+
+```bash
+docker run -it --rm \
+  -v ~/.ssh:/root/.ssh:ro \
+  -e ORIGEM=usuario@azure \
+  -e DESTINO=usuario@hetzner \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest
+```
+
+---
+
+## Variáveis de ambiente
+
+### Configuração SSH (entrypoint)
+
+| Variável | Descrição |
+|----------|-----------|
+| `SSH_PRIVATE_KEY` | Conteúdo da chave privada SSH (gravado em `/root/.ssh/id_rsa`) |
+| `SSH_CONFIG` | Conteúdo do arquivo `~/.ssh/config` |
+| `SSH_KNOWN_HOSTS` | Conteúdo do arquivo `known_hosts` |
+| `SSH_STRICT_HOST_CHECKING` | `false` para desabilitar verificação de host (padrão: `true`) |
+
+### Comportamento dos scripts
 
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
@@ -37,29 +128,12 @@ bash volumes-sync.sh
 | `DESTINO` | *(interativo)* | Servidor de destino (`usuario@ip`, alias SSH ou `localhost`) |
 | `DRY_RUN` | `true` | Simulação sem transferir arquivos |
 | `VERBOSE` | `false` | Listar todos os arquivos durante a transferência |
-| `DEBUG` | `false` | Apenas exibir os comandos, sem executar |
+| `DEBUG` | `false` | Apenas exibir os comandos rsync, sem executar |
 | `USE_SUDO` | `true` | Usar `sudo` para acessar os volumes Docker |
 
-### Exemplos de uso
+---
 
-```bash
-# Modo interativo (solicita origem e destino)
-bash volumes-sync.sh
-
-# Definir servidores por variável de ambiente
-ORIGEM=usuario@azure DESTINO=usuario@hetzner bash volumes-sync.sh
-
-# Execução real (desativa dry-run)
-DRY_RUN=false ORIGEM=localhost DESTINO=usuario@hetzner bash volumes-sync.sh
-
-# Ver arquivos transferidos
-VERBOSE=true DRY_RUN=false ORIGEM=usuario@azure DESTINO=usuario@hetzner bash volumes-sync.sh
-
-# Apenas mostrar os comandos rsync gerados
-DEBUG=true ORIGEM=usuario@azure DESTINO=localhost bash volumes-sync.sh
-```
-
-### Fluxo interativo
+## Fluxo interativo (volumes-sync.sh)
 
 1. Lista servidores disponíveis via `~/.ssh/config` + `localhost`
 2. Permite selecionar origem e destino por número ou digitar manualmente
@@ -82,83 +156,30 @@ DEBUG=true ORIGEM=usuario@azure DESTINO=localhost bash volumes-sync.sh
 
 ---
 
-## volumes-sync-tui.sh
+## Uso sem Docker
 
-Versão com interface visual usando `dialog` ou `whiptail`. Instala o `dialog` automaticamente se não estiver disponível.
-
-### Instalação rápida
+Os scripts também podem ser executados diretamente via curl:
 
 ```bash
+# volumes-sync.sh
+curl https://raw.githubusercontent.com/marcelofmatos/scripts/main/docker/volumes-sync.sh | bash
+
+# volumes-sync-tui.sh
 curl https://raw.githubusercontent.com/marcelofmatos/scripts/main/docker/volumes-sync-tui.sh | bash
-```
 
-### Funcionalidades
-
-- Menus visuais com caixas de diálogo
-- Checklist de volumes com todos pré-selecionados (desmarque os que não deseja)
-- Painel de opções: DRY_RUN, VERBOSE, USE_SUDO, DEBUG
-- Tela de confirmação com resumo completo
-- Barra de progresso por volume
-- Relatório final com tempo de execução (início, término, duração)
-
-### Variáveis de ambiente
-
-As mesmas do `volumes-sync.sh`: `ORIGEM`, `DESTINO`, `DRY_RUN`, `VERBOSE`, `USE_SUDO`, `DEBUG`.
-
----
-
-## volumes-export.sh
-
-Gera comandos prontos para backup, restore e recriação de volumes Docker. Útil para migrações manuais ou documentação.
-
-### Instalação rápida
-
-```bash
+# volumes-export.sh
 curl https://raw.githubusercontent.com/marcelofmatos/scripts/main/docker/volumes-export.sh | bash
 ```
 
-### Uso
-
-```bash
-# Volumes do servidor local
-bash volumes-export.sh
-
-# Volumes de um servidor remoto
-bash volumes-export.sh usuario@servidor
-```
-
-### Saída gerada
-
-O script imprime três blocos de comandos prontos para copiar e executar:
-
-**Backup (origem):**
-```bash
-mkdir -p volume-backups
-docker run --rm -v meu-volume:/source:ro -v $(pwd)/volume-backups:/backup alpine \
-  tar czf /backup/meu-volume.tar.gz -C /source .
-```
-
-**Restore (destino):**
-```bash
-docker run --rm -v meu-volume:/target -v $(pwd)/volume-backups:/backup alpine \
-  tar xzf /backup/meu-volume.tar.gz -C /target
-```
-
-**Criação de volumes:**
-```bash
-# Volume: meu-volume (usado por: container1, container2)
-docker volume create meu-volume
-```
-
----
-
-## Requisitos
+### Requisitos (sem Docker)
 
 - `bash` 4+
 - `rsync` instalado em origem e destino
-- `ssh` configurado com acesso sem senha (chave pública) para servidores remotos
+- `openssh-client` com acesso por chave pública para servidores remotos
 - `docker` acessível nos servidores (com ou sem `sudo`)
 - `dialog` ou `whiptail` (apenas para `volumes-sync-tui.sh` — instalado automaticamente se ausente)
+
+---
 
 ## Dicas
 
@@ -166,3 +187,4 @@ docker volume create meu-volume
 - Use `DRY_RUN=true` (padrão) para validar a operação antes de transferir dados
 - O modo `DEBUG=true` exibe os comandos rsync exatos sem executar nada — útil para auditoria
 - Volumes inexistentes no destino são criados automaticamente antes da sincronização
+- Ao usar `SSH_STRICT_HOST_CHECKING=false`, combine com `SSH_KNOWN_HOSTS` em ambientes de produção
