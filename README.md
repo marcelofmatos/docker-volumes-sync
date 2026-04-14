@@ -81,19 +81,23 @@ docker run -it --rm \
 
 ### Acessando o host local como origem ou destino
 
-Quando `ORIGEM` ou `DESTINO` for o próprio host que executa o container, monte o socket Docker:
+Quando `ORIGEM` ou `DESTINO` for o próprio host que executa o container, monte o socket Docker e o diretório de volumes:
 
 ```bash
 docker run -it --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -v /var/lib/docker/volumes:/var/lib/docker/volumes \
+  -v ~/.ssh/config:/root/.ssh/config:ro \
+  -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
   -e ORIGEM=localhost \
   -e DESTINO=usuario@hetzner \
   -e USE_SUDO=false \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
-> Use `USE_SUDO=false` ao acessar Docker via socket — o container já tem permissão direta.
+O mount de `/var/lib/docker/volumes` é necessário para que o `rsync` acesse os dados dos volumes: o `docker volume inspect` retorna o caminho real no host (ex: `/var/lib/docker/volumes/meu-volume/_data`) e esse caminho precisa existir dentro do container.
+
+> Use `USE_SUDO=false` — com o socket e o diretório de volumes montados, o container acessa o Docker e os dados diretamente sem necessidade de sudo.
 
 ### Alternativa: montar o diretório SSH
 

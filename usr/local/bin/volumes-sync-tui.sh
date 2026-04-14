@@ -112,10 +112,12 @@ testar_conexao() {
             erros="Docker não acessível em $servidor"
         fi
     else
-        if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$servidor" exit &>/dev/null; then
-            erros="Falha na conexão SSH com $servidor"
-        elif ! ssh -o ConnectTimeout=5 "$servidor" "docker info" &>/dev/null && \
-             ! ssh -o ConnectTimeout=5 "$servidor" "sudo docker info" &>/dev/null; then
+        local ssh_err
+        ssh_err=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "$servidor" exit 2>&1)
+        if [ $? -ne 0 ]; then
+            erros="Falha na conexão SSH com $servidor\n\n$ssh_err"
+        elif ! ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" "docker info" &>/dev/null && \
+             ! ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" "sudo docker info" &>/dev/null; then
             erros="Docker não acessível em $servidor"
         fi
     fi
