@@ -6,8 +6,8 @@ Scripts interativos para sincronizar e exportar volumes Docker entre servidores 
 
 | Script | Descrição |
 |--------|-----------|
-| `volumes-sync.sh` | Sincronização interativa via terminal (CLI colorido) — **padrão** |
-| `volumes-sync-tui.sh` | Sincronização com interface visual (dialog/whiptail) |
+| `volumes-sync-tui.sh` | Sincronização com interface visual (dialog/whiptail) — **padrão** |
+| `volumes-sync.sh` | Sincronização interativa via terminal (CLI colorido) |
 | `volumes-export.sh` | Gera comandos de backup, restore e criação de volumes |
 
 ---
@@ -28,7 +28,7 @@ ghcr.io/marcelofmatos/docker-volumes-sync:latest
 docker pull ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
-### volumes-sync.sh (padrão)
+### volumes-sync-tui.sh (padrão)
 
 ```bash
 # Modo totalmente interativo
@@ -53,14 +53,14 @@ docker run -it --rm \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
-### volumes-sync-tui.sh
+### volumes-sync.sh
 
 ```bash
 docker run -it --rm \
   -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
   -e SSH_CONFIG="$(cat ~/.ssh/config)" \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest \
-  /usr/local/bin/volumes-sync-tui.sh
+  /usr/local/bin/volumes-sync.sh
 ```
 
 ### volumes-export.sh
@@ -146,7 +146,7 @@ docker run -it --rm \
 
 ---
 
-## Fluxo interativo (volumes-sync.sh)
+## Fluxo interativo
 
 1. Lista servidores disponíveis via `~/.ssh/config` + `localhost`
 2. Permite selecionar origem e destino por número ou digitar manualmente
