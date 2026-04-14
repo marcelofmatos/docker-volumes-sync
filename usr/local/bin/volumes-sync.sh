@@ -38,7 +38,8 @@ DEBUG_MODE=${DEBUG:-false}
 VERBOSE=${VERBOSE:-false}
 ORIGEM=${ORIGEM:-""}
 DESTINO=${DESTINO:-""}
-USE_SUDO=${USE_SUDO:-true}
+[ "$(id -u)" = "0" ] && USE_SUDO_DEFAULT=false || USE_SUDO_DEFAULT=true
+USE_SUDO=${USE_SUDO:-$USE_SUDO_DEFAULT}
 
 # Banner
 echo -e "${CYAN}======================================${NC}"

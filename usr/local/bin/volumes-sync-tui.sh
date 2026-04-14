@@ -25,7 +25,9 @@ DEBUG_MODE=${DEBUG:-false}
 VERBOSE=${VERBOSE:-false}
 ORIGEM=${ORIGEM:-""}
 DESTINO=${DESTINO:-""}
-USE_SUDO=${USE_SUDO:-true}
+# Desabilitar sudo automaticamente quando rodando como root
+[ "$(id -u)" = "0" ] && USE_SUDO_DEFAULT=false || USE_SUDO_DEFAULT=true
+USE_SUDO=${USE_SUDO:-$USE_SUDO_DEFAULT}
 
 C_TITLE="#06B6D4"
 C_OK="#22C55E"
@@ -168,9 +170,10 @@ for vol in "${VOLUMES_ORIGEM[@]}"; do
 done
 ITEMS=("${ITEMS_EXIST[@]}" "${ITEMS_NEW[@]}")
 
+COUNT_DEST=${#VOLUMES_DESTINO[@]}
 echo ""
 gum style --foreground "$C_DIM" \
-    "$(gum style --foreground "$C_OK" "✓ $COUNT_EXIST existem no destino")  •  $(gum style --foreground "$C_WARN" "+ $COUNT_NEW serão criados")  •  TAB seleciona • ENTER confirma • sem seleção = todos"
+    "origem: $(gum style --foreground "$C_TITLE" "${#VOLUMES_ORIGEM[@]}")  •  destino: $(gum style --foreground "$C_TITLE" "$COUNT_DEST")  •  em comum: $(gum style --foreground "$C_OK" "$COUNT_EXIST")  •  TAB seleciona • ENTER confirma • sem seleção = todos"
 echo ""
 
 SELECTED=$(printf '%s\n' "${ITEMS[@]}" | gum choose --no-limit \
