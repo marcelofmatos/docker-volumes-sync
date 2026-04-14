@@ -3,22 +3,22 @@
 # curl https://raw.githubusercontent.com/marcelofmatos/scripts/main/docker/volumes-sync-tui.sh | bash
 #
 # Script interativo com interface TUI usando gum (https://github.com/charmbracelet/gum)
+# Opções via variáveis de ambiente: DRY_RUN, VERBOSE, DEBUG, USE_SUDO, ORIGEM, DESTINO
 #
 
 set -eo pipefail
 
-# Verificar dependência
 if ! command -v gum &>/dev/null; then
     echo "Erro: gum não encontrado. Instale em https://github.com/charmbracelet/gum" >&2
     exit 1
 fi
 
-# Arquivos temporários
 TMPLOG=$(mktemp)
 TMPSCRIPT=$(mktemp --suffix=.sh)
-trap "rm -f $TMPLOG $TMPSCRIPT" EXIT
+TMPVOL_ORIG=$(mktemp)
+TMPVOL_DEST=$(mktemp)
+trap "rm -f $TMPLOG $TMPSCRIPT $TMPVOL_ORIG $TMPVOL_DEST" EXIT
 
-# Ler configurações de variáveis de ambiente
 [ -n "${DRY_RUN+x}" ] && DRY_RUN_ORIGINAL=$DRY_RUN
 DRY_RUN=${DRY_RUN:-true}
 DEBUG_MODE=${DEBUG:-false}
@@ -27,18 +27,11 @@ ORIGEM=${ORIGEM:-""}
 DESTINO=${DESTINO:-""}
 USE_SUDO=${USE_SUDO:-true}
 
-# Cores
 C_TITLE="#06B6D4"
 C_OK="#22C55E"
 C_ERR="#EF4444"
 C_WARN="#EAB308"
 C_DIM="#6B7280"
-
-# Banner
-gum style \
-    --foreground "$C_TITLE" --border-foreground "$C_TITLE" --border rounded \
-    --align center --width 52 --margin "1 2" \
-    "  Sincronização de Volumes Docker  "
 
 # ─── Seleção de servidor ──────────────────────────────────────────────────────
 
@@ -64,39 +57,28 @@ selecionar_servidor() {
         --selected.foreground "$C_OK")
 
     if [ "$ESCOLHA" = "Digitar manualmente..." ]; then
-        ESCOLHA=$(gum input \
-            --placeholder "usuario@ip ou alias SSH" \
-            --prompt "> " \
-            --prompt.foreground "$C_TITLE")
+        ESCOLHA=$(gum input --placeholder "usuario@ip ou alias SSH" \
+            --prompt "> " --prompt.foreground "$C_TITLE")
         [ -z "$ESCOLHA" ] && exit 0
     fi
 
     echo "$ESCOLHA"
 }
 
-if [ -z "$ORIGEM" ]; then
-    ORIGEM=$(selecionar_servidor "Servidor de ORIGEM:")
-    [ -z "$ORIGEM" ] && exit 0
-fi
-
-if [ -z "$DESTINO" ]; then
-    DESTINO=$(selecionar_servidor "Servidor de DESTINO:")
-    [ -z "$DESTINO" ] && exit 0
-fi
+[ -z "$ORIGEM"  ] && { ORIGEM=$(selecionar_servidor  "Origem:"); [ -z "$ORIGEM"  ] && exit 0; }
+[ -z "$DESTINO" ] && { DESTINO=$(selecionar_servidor "Destino:"); [ -z "$DESTINO" ] && exit 0; }
 
 # ─── Configurar comandos Docker ───────────────────────────────────────────────
 
 configurar_docker_cmds() {
     if [ "$ORIGEM" = "localhost" ]; then
-        DOCKER_ORIGEM="$($USE_SUDO && echo 'sudo docker' || echo 'docker')"
-        SSH_ORIGEM=""
+        DOCKER_ORIGEM="$($USE_SUDO && echo 'sudo docker' || echo 'docker')"; SSH_ORIGEM=""
     else
         DOCKER_ORIGEM="ssh $ORIGEM $($USE_SUDO && echo 'sudo docker' || echo 'docker')"
         SSH_ORIGEM="ssh $ORIGEM"
     fi
     if [ "$DESTINO" = "localhost" ]; then
-        DOCKER_DESTINO="$($USE_SUDO && echo 'sudo docker' || echo 'docker')"
-        SSH_DESTINO=""
+        DOCKER_DESTINO="$($USE_SUDO && echo 'sudo docker' || echo 'docker')"; SSH_DESTINO=""
     else
         DOCKER_DESTINO="ssh $DESTINO $($USE_SUDO && echo 'sudo docker' || echo 'docker')"
         SSH_DESTINO="ssh $DESTINO"
@@ -120,8 +102,7 @@ testar_conexao() {
         "$servidor" exit 2>&1) && ssh_exit=0 || ssh_exit=$?
 
     if [ $ssh_exit -ne 0 ]; then
-        echo ""
-        gum style --foreground "$C_ERR" "✗ Falha na conexão SSH — $papel: $servidor"
+        gum style --foreground "$C_ERR" "✗ Falha SSH — $papel: $servidor"
         gum style --foreground "$C_DIM" "$ssh_err"
         echo "" && read -r -p "Pressione ENTER para sair..."
         exit 1
@@ -135,7 +116,6 @@ testar_conexao() {
             "sudo docker info" &>/dev/null && docker_ok=true
     fi
     if ! $docker_ok; then
-        echo ""
         gum style --foreground "$C_ERR" "✗ Docker não acessível em $servidor"
         echo "" && read -r -p "Pressione ENTER para sair..."
         exit 1
@@ -145,162 +125,88 @@ testar_conexao() {
 }
 
 echo ""
-gum style --foreground "$C_TITLE" --bold "Testando conectividade..."
-[ "$ORIGEM" != "localhost" ] && \
-    gum spin --spinner dot --title " Verificando $ORIGEM..." -- \
-        bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$ORIGEM' exit 2>/dev/null" \
-        2>/dev/null || true
+[ "$ORIGEM"  != "localhost" ] && gum spin --spinner dot --title " Verificando $ORIGEM..."  -- \
+    bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$ORIGEM' exit" \
+    2>/dev/null || true
 testar_conexao "$ORIGEM" "Origem"
 
-[ "$DESTINO" != "localhost" ] && \
-    gum spin --spinner dot --title " Verificando $DESTINO..." -- \
-        bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$DESTINO' exit 2>/dev/null" \
-        2>/dev/null || true
+[ "$DESTINO" != "localhost" ] && gum spin --spinner dot --title " Verificando $DESTINO..." -- \
+    bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$DESTINO' exit" \
+    2>/dev/null || true
 testar_conexao "$DESTINO" "Destino"
 
 # ─── Carregar volumes ─────────────────────────────────────────────────────────
 
 echo ""
-gum style --foreground "$C_TITLE" --bold "Carregando volumes..."
-
 set +e
-VOLUMES_ORIGEM=($(gum spin --spinner dot --title " Listando volumes da origem..." -- \
-    bash -c "$DOCKER_ORIGEM volume ls --format '{{.Name}}' 2>/dev/null"))
-VOLUMES_DESTINO=($(gum spin --spinner dot --title " Listando volumes do destino..." -- \
-    bash -c "$DOCKER_DESTINO volume ls --format '{{.Name}}' 2>/dev/null"))
+gum spin --spinner dot --title " Carregando volumes da origem..." -- \
+    bash -c "$DOCKER_ORIGEM volume ls --format '{{.Name}}' > '$TMPVOL_ORIG' 2>/dev/null"
+gum spin --spinner dot --title " Carregando volumes do destino..." -- \
+    bash -c "$DOCKER_DESTINO volume ls --format '{{.Name}}' > '$TMPVOL_DEST' 2>/dev/null"
+VOLUMES_ORIGEM=($(cat "$TMPVOL_ORIG"))
+VOLUMES_DESTINO=($(cat "$TMPVOL_DEST"))
 set -e
 
 if [ ${#VOLUMES_ORIGEM[@]} -eq 0 ]; then
-    echo ""
     gum style --foreground "$C_ERR" "✗ Nenhum volume encontrado na origem ($ORIGEM)"
     exit 1
 fi
 
 declare -A destino_volumes
-for vol in "${VOLUMES_DESTINO[@]}"; do
-    destino_volumes[$vol]=1
-done
+for vol in "${VOLUMES_DESTINO[@]}"; do destino_volumes[$vol]=1; done
 
 # ─── Seleção de volumes ───────────────────────────────────────────────────────
 
-echo ""
-gum style --foreground "$C_TITLE" --bold "Volumes disponíveis em $ORIGEM:"
-gum style --foreground "$C_DIM" "TAB para selecionar • ENTER para confirmar • sem seleção = sincronizar todos"
-echo ""
-
-ITEMS=()
+COUNT_EXIST=0; COUNT_NEW=0
+ITEMS_EXIST=(); ITEMS_NEW=()
 for vol in "${VOLUMES_ORIGEM[@]}"; do
     if [ -n "${destino_volumes[$vol]}" ]; then
-        ITEMS+=("$vol  ✓")
+        ITEMS_EXIST+=("$vol  ✓"); (( COUNT_EXIST++ )) || true
     else
-        ITEMS+=("$vol  +")
+        ITEMS_NEW+=("$vol  +");  (( COUNT_NEW++   )) || true
     fi
 done
+ITEMS=("${ITEMS_EXIST[@]}" "${ITEMS_NEW[@]}")
+
+echo ""
+gum style --foreground "$C_DIM" \
+    "$(gum style --foreground "$C_OK" "✓ $COUNT_EXIST existem no destino")  •  $(gum style --foreground "$C_WARN" "+ $COUNT_NEW serão criados")  •  TAB seleciona • ENTER confirma • sem seleção = todos"
+echo ""
 
 SELECTED=$(printf '%s\n' "${ITEMS[@]}" | gum choose --no-limit \
     --cursor.foreground "$C_TITLE" \
     --selected.foreground "$C_OK" \
     --item.foreground "" \
-    --header "  ✓ existe no destino  •  + será criado") || true
+    --header "  $ORIGEM  →  $DESTINO$($DRY_RUN && echo '  [dry-run]' || true)") || true
 
 VOLUMES_SELECIONADOS=()
 if [ -z "$SELECTED" ]; then
-    # Nenhum selecionado = sincronizar todos
     VOLUMES_SELECIONADOS=("${VOLUMES_ORIGEM[@]}")
-    gum style --foreground "$C_DIM" "Nenhum volume selecionado — sincronizando todos."
 else
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        vol=$(echo "$line" | sed 's/  [✓+]$//')
-        VOLUMES_SELECIONADOS+=("$vol")
+        VOLUMES_SELECIONADOS+=("$(echo "$line" | sed 's/  [✓+]$//')")
     done <<< "$SELECTED"
 fi
 
-# ─── Opções de sincronização ──────────────────────────────────────────────────
-
-echo ""
-gum style --foreground "$C_TITLE" --bold "Opções de sincronização:"
-echo ""
-
-if [ -z "${DRY_RUN_ORIGINAL+x}" ]; then
-    gum confirm \
-        --prompt.foreground "$C_WARN" \
-        --selected.background "$C_WARN" \
-        --unselected.foreground "$C_DIM" \
-        "Executar sincronização real? (padrão: dry-run)" \
-        --affirmative "Sim, executar" --negative "Não, dry-run" \
-        && DRY_RUN=false || DRY_RUN=true
-fi
-
-gum confirm \
-    --prompt.foreground "$C_DIM" \
-    --unselected.foreground "$C_DIM" \
-    "Mostrar lista de arquivos transferidos? (verbose)" \
-    --affirmative "Sim" --negative "Não" \
-    && VERBOSE=true || VERBOSE=false
-
-gum confirm \
-    --prompt.foreground "$C_DIM" \
-    --unselected.foreground "$C_DIM" \
-    "Usar sudo para acessar volumes Docker?" \
-    --affirmative "Sim" --negative "Não" \
-    --default=$($USE_SUDO && echo "true" || echo "false") \
-    && USE_SUDO=true || USE_SUDO=false
-
-gum confirm \
-    --prompt.foreground "$C_DIM" \
-    --unselected.foreground "$C_DIM" \
-    "Modo debug? (apenas exibir comandos rsync, sem executar)" \
-    --affirmative "Sim" --negative "Não" \
-    && DEBUG_MODE=true || DEBUG_MODE=false
-
-configurar_docker_cmds
-
-# ─── Resumo e confirmação ─────────────────────────────────────────────────────
-
-echo ""
-gum style \
-    --border rounded --border-foreground "$C_TITLE" \
-    --padding "0 2" --margin "0 1" \
-    "$(gum style --bold "Origem: ") $ORIGEM
-$(gum style --bold "Destino:") $DESTINO
-$(gum style --bold "Volumes:") ${#VOLUMES_SELECIONADOS[@]}
-$(gum style --bold "Modo:   ") $($DRY_RUN && gum style --foreground "$C_WARN" "DRY-RUN (simulação)" || gum style --foreground "$C_ERR" "EXECUÇÃO REAL")
-$(gum style --bold "Sudo:   ") $($USE_SUDO && echo Sim || echo Não)
-$(gum style --bold "Debug:  ") $($DEBUG_MODE && echo Sim || echo Não)"
-echo ""
-
-gum confirm \
-    --prompt.foreground "$C_TITLE" \
-    --selected.background "$C_TITLE" \
-    "Confirmar operação?" \
-    --affirmative "Sim, continuar" --negative "Cancelar" \
-    || exit 0
-
-# ─── Funções de sincronização ─────────────────────────────────────────────────
+# ─── Sincronização ────────────────────────────────────────────────────────────
 
 get_mountpoint() {
-    local docker_cmd=$1
-    local volume=$2
+    local docker_cmd=$1 volume=$2
     $docker_cmd volume inspect "$volume" --format '{{.Mountpoint}}' 2>/dev/null || echo ""
 }
 
 sync_volume() {
-    local volume=$1
-    local current=$2
-    local total=$3
+    local volume=$1 current=$2 total=$3
     local label="[$current/$total] $volume"
 
-    # Mountpoint origem
-    local MOUNT_ORIGEM
+    local MOUNT_ORIGEM MOUNT_DESTINO
     if [ "$ORIGEM" = "localhost" ]; then
         MOUNT_ORIGEM=$(get_mountpoint "$DOCKER_ORIGEM" "$volume")
     else
-        if $USE_SUDO; then
-            MOUNT_ORIGEM=$($SSH_ORIGEM "sudo docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "")
-        else
-            MOUNT_ORIGEM=$($SSH_ORIGEM "docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "")
-        fi
+        $USE_SUDO \
+            && MOUNT_ORIGEM=$($SSH_ORIGEM "sudo docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "") \
+            || MOUNT_ORIGEM=$($SSH_ORIGEM "docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "")
     fi
 
     if [ -z "$MOUNT_ORIGEM" ]; then
@@ -308,46 +214,34 @@ sync_volume() {
         return 1
     fi
 
-    # Mountpoint destino
-    local MOUNT_DESTINO
     if [ "$DESTINO" = "localhost" ]; then
         MOUNT_DESTINO=$(get_mountpoint "$DOCKER_DESTINO" "$volume")
     else
-        if $USE_SUDO; then
-            MOUNT_DESTINO=$($SSH_DESTINO "sudo docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "")
-        else
-            MOUNT_DESTINO=$($SSH_DESTINO "docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "")
-        fi
+        $USE_SUDO \
+            && MOUNT_DESTINO=$($SSH_DESTINO "sudo docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "") \
+            || MOUNT_DESTINO=$($SSH_DESTINO "docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null" || echo "")
     fi
 
-    # Criar volume no destino se não existir
     if [ -z "$MOUNT_DESTINO" ] && ! $DEBUG_MODE; then
-        gum spin --spinner dot --title " $label — criando volume no destino..." -- \
+        gum spin --spinner dot --title " $label — criando volume..." -- \
             bash -c "$DOCKER_DESTINO volume create '$volume' > /dev/null"
         if [ "$DESTINO" = "localhost" ]; then
             MOUNT_DESTINO=$(get_mountpoint "$DOCKER_DESTINO" "$volume")
         else
-            if $USE_SUDO; then
-                MOUNT_DESTINO=$($SSH_DESTINO "sudo docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null")
-            else
-                MOUNT_DESTINO=$($SSH_DESTINO "docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null")
-            fi
+            $USE_SUDO \
+                && MOUNT_DESTINO=$($SSH_DESTINO "sudo docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null") \
+                || MOUNT_DESTINO=$($SSH_DESTINO "docker volume inspect $volume --format '{{.Mountpoint}}' 2>/dev/null")
         fi
     fi
 
-    # Opções rsync
     local RSYNC_OPTS
-    if $VERBOSE; then
-        RSYNC_OPTS="-avz --progress -e 'ssh -o StrictHostKeyChecking=no'"
-    else
-        RSYNC_OPTS="-az --info=progress2 -e 'ssh -o StrictHostKeyChecking=no'"
-    fi
-    $DRY_RUN    && RSYNC_OPTS="$RSYNC_OPTS --dry-run"
-    $USE_SUDO   && RSYNC_OPTS="$RSYNC_OPTS --rsync-path='sudo rsync'"
+    $VERBOSE && RSYNC_OPTS="-avz --progress -e 'ssh -o StrictHostKeyChecking=no'" \
+             || RSYNC_OPTS="-az --info=progress2 -e 'ssh -o StrictHostKeyChecking=no'"
+    $DRY_RUN  && RSYNC_OPTS="$RSYNC_OPTS --dry-run"
+    $USE_SUDO && RSYNC_OPTS="$RSYNC_OPTS --rsync-path='sudo rsync'"
 
-    # Comando rsync conforme cenário
     local RSYNC_CMD
-    if [ "$ORIGEM" = "localhost" ] && [ "$DESTINO" = "localhost" ]; then
+    if   [ "$ORIGEM" = "localhost" ] && [ "$DESTINO" = "localhost" ]; then
         $USE_SUDO && RSYNC_CMD="sudo rsync $RSYNC_OPTS $MOUNT_ORIGEM/ $MOUNT_DESTINO/" \
                   || RSYNC_CMD="rsync $RSYNC_OPTS $MOUNT_ORIGEM/ $MOUNT_DESTINO/"
     elif [ "$ORIGEM" = "localhost" ]; then
@@ -367,22 +261,16 @@ sync_volume() {
         return 0
     fi
 
-    # Executar via script temporário para preservar quoting
     cat > "$TMPSCRIPT" <<EOF
 #!/bin/bash
 eval "$RSYNC_CMD" > "$TMPLOG" 2>&1
 EOF
     chmod +x "$TMPSCRIPT"
 
-    local spin_title
-    $DRY_RUN && spin_title=" $label — dry-run..." \
-             || spin_title=" $label — sincronizando..."
-
+    local spin_title=" $label$($DRY_RUN && echo ' — dry-run...' || echo ' — sincronizando...')"
     if gum spin --spinner dot --title "$spin_title" -- bash "$TMPSCRIPT"; then
         gum style --foreground "$C_OK" "  ✓ $label"
-        if $VERBOSE; then
-            gum style --foreground "$C_DIM" "$(cat "$TMPLOG")"
-        fi
+        $VERBOSE && gum style --foreground "$C_DIM" "$(cat "$TMPLOG")" || true
         return 0
     else
         gum style --foreground "$C_ERR" "  ✗ $label"
@@ -391,78 +279,51 @@ EOF
     fi
 }
 
-# ─── Processar volumes ────────────────────────────────────────────────────────
+# ─── Processar ───────────────────────────────────────────────────────────────
 
 START_TIME=$(date +%s)
-START_TIME_FORMATTED=$(date '+%d/%m/%Y %H:%M:%S')
 echo ""
-gum style --foreground "$C_TITLE" --bold "Sincronizando volumes..."
-echo ""
-
-declare -A RESULTADO_VOLUMES
 TOTAL=${#VOLUMES_SELECIONADOS[@]}
+declare -A RESULTADO_VOLUMES
 SUCESSO=0; ERROS=0
 
 for i in "${!VOLUMES_SELECIONADOS[@]}"; do
     volume="${VOLUMES_SELECIONADOS[$i]}"
-    set +e
-    sync_volume "$volume" "$((i + 1))" "$TOTAL"
-    STATUS=$?
-    set -e
+    set +e; sync_volume "$volume" "$((i + 1))" "$TOTAL"; STATUS=$?; set -e
     if $DEBUG_MODE; then
         RESULTADO_VOLUMES[$volume]="debug"
     elif [ $STATUS -eq 0 ]; then
-        RESULTADO_VOLUMES[$volume]="ok"
-        $DRY_RUN || (( SUCESSO++ )) || true
+        RESULTADO_VOLUMES[$volume]="ok"; $DRY_RUN || (( SUCESSO++ )) || true
     else
-        RESULTADO_VOLUMES[$volume]="erro"
-        (( ERROS++ )) || true
+        RESULTADO_VOLUMES[$volume]="erro"; (( ERROS++ )) || true
     fi
 done
 
-# ─── Relatório final ──────────────────────────────────────────────────────────
+# ─── Relatório ───────────────────────────────────────────────────────────────
 
-END_TIME=$(date +%s)
-ELAPSED=$((END_TIME - START_TIME))
-HOURS=$((ELAPSED / 3600)); MINUTES=$(((ELAPSED % 3600) / 60)); SECS=$((ELAPSED % 60))
-[ $HOURS -gt 0 ]   && ELAPSED_FMT="${HOURS}h ${MINUTES}m ${SECS}s" \
-|| [ $MINUTES -gt 0 ] && ELAPSED_FMT="${MINUTES}m ${SECS}s" \
-|| ELAPSED_FMT="${SECS}s"
+ELAPSED=$(( $(date +%s) - START_TIME ))
+HOURS=$((ELAPSED/3600)); MINS=$(((ELAPSED%3600)/60)); SECS=$((ELAPSED%60))
+[ $HOURS -gt 0 ] && TFMT="${HOURS}h ${MINS}m ${SECS}s" \
+|| [ $MINS -gt 0 ] && TFMT="${MINS}m ${SECS}s" || TFMT="${SECS}s"
 
 echo ""
-gum style \
-    --border rounded --border-foreground "$C_TITLE" \
-    --padding "0 2" --margin "0 1" \
-    --bold "Relatório Final"
-
+gum style --foreground "$C_TITLE" --bold "Relatório  •  $ORIGEM → $DESTINO  •  $TFMT"
 echo ""
+
 for volume in "${VOLUMES_SELECIONADOS[@]}"; do
     case "${RESULTADO_VOLUMES[$volume]}" in
         ok)    $DRY_RUN \
-                   && gum style --foreground "$C_WARN" "  ~ $volume  (dry-run)" \
+                   && gum style --foreground "$C_WARN" "  ~ $volume" \
                    || gum style --foreground "$C_OK"   "  ✓ $volume" ;;
-        erro)  gum style --foreground "$C_ERR"  "  ✗ $volume" ;;
-        debug) gum style --foreground "$C_DIM"  "  → $volume  (debug)" ;;
+        erro)  gum style --foreground "$C_ERR" "  ✗ $volume" ;;
+        debug) gum style --foreground "$C_DIM" "  → $volume" ;;
     esac
 done
 
 echo ""
-gum style --foreground "$C_DIM" "Início:  $START_TIME_FORMATTED"
-gum style --foreground "$C_DIM" "Término: $(date '+%d/%m/%Y %H:%M:%S')"
-gum style --foreground "$C_DIM" "Tempo:   $ELAPSED_FMT"
-
 if ! $DEBUG_MODE && ! $DRY_RUN; then
-    echo ""
-    gum style \
-        "$(gum style --foreground "$C_OK" "✓ Sucesso: $SUCESSO")  $(gum style --foreground "$C_ERR" "✗ Erros: $ERROS")  Total: $TOTAL"
+    gum style "$(gum style --foreground "$C_OK" "✓ $SUCESSO ok")  $(gum style --foreground "$C_ERR" "✗ $ERROS erro")  total $TOTAL"
 fi
-
-if $DRY_RUN; then
-    echo ""
-    gum style --foreground "$C_WARN" "Use DRY_RUN=false para executar a sincronização real."
-fi
-if $DEBUG_MODE; then
-    echo ""
-    gum style --foreground "$C_DIM" "Modo debug ativo — apenas comandos foram exibidos."
-fi
+$DRY_RUN  && gum style --foreground "$C_WARN" "dry-run — use DRY_RUN=false para sincronizar"
+$DEBUG_MODE && gum style --foreground "$C_DIM" "debug — apenas comandos exibidos"
 echo ""
