@@ -200,7 +200,7 @@ if [ -z "$SELECTED" ]; then
 else
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        VOLUMES_SELECIONADOS+=("$(echo "$line" | sed 's/  [✓+]$//')")
+        VOLUMES_SELECIONADOS+=("$(echo "$line" | sed 's/  .*$//')")
     done <<< "$SELECTED"
 fi
 
