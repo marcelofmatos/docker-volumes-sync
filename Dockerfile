@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         rsync \
         openssh-client \
+        docker.io \
         curl \
         ca-certificates \
     && DPKG_ARCH=$(dpkg --print-architecture) \
