@@ -192,6 +192,20 @@ else
     done <<< "$SELECTED"
 fi
 
+# ─── Modo de execução ─────────────────────────────────────────────────────────
+
+if [ -z "${DRY_RUN_ORIGINAL+x}" ]; then
+    echo ""
+    gum confirm \
+        --prompt.foreground "$C_WARN" \
+        --selected.background "$C_WARN" \
+        --unselected.foreground "$C_DIM" \
+        --default=false \
+        "Executar sincronização real?" \
+        --affirmative "Sim, sincronizar" --negative "Não, dry-run" \
+        && DRY_RUN=false || DRY_RUN=true
+fi
+
 # ─── Sincronização ────────────────────────────────────────────────────────────
 
 get_mountpoint() {
