@@ -112,18 +112,24 @@ testar_conexao() {
             erros="Docker não acessível em $servidor"
         fi
     else
-        local ssh_err
-        ssh_err=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "$servidor" exit 2>&1)
-        if [ $? -ne 0 ]; then
+        local ssh_err ssh_exit
+        ssh_err=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "$servidor" exit 2>&1) && ssh_exit=0 || ssh_exit=$?
+        if [ $ssh_exit -ne 0 ]; then
             erros="Falha na conexão SSH com $servidor\n\n$ssh_err"
-        elif ! ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" "docker info" &>/dev/null && \
-             ! ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" "sudo docker info" &>/dev/null; then
-            erros="Docker não acessível em $servidor"
+        else
+            local docker_ok=false
+            ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" "docker info" &>/dev/null && docker_ok=true
+            if ! $docker_ok; then
+                ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" "sudo docker info" &>/dev/null && docker_ok=true
+            fi
+            if ! $docker_ok; then
+                erros="Docker não acessível em $servidor"
+            fi
         fi
     fi
 
     if [ -n "$erros" ]; then
-        $DIALOG --title "Erro de Conectividade ($papel)" --msgbox "$erros" 8 60
+        $DIALOG --title "Erro de Conectividade ($papel)" --msgbox "$erros" 12 70
         exit 1
     fi
 }
