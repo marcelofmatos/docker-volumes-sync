@@ -111,40 +111,34 @@ testar_conexao() {
     local papel=$2
 
     if [ "$servidor" = "localhost" ]; then
-        local docker_ok=false
-        docker info &>/dev/null && docker_ok=true
-        if ! $docker_ok; then sudo docker info &>/dev/null && docker_ok=true; fi
-        if ! $docker_ok; then
-            gum style --foreground "$C_ERR" "✗ Docker não acessível em localhost"
-            echo "" && read -r -p "Pressione ENTER para sair..."
-            exit 1
-        fi
-    else
-        local ssh_err ssh_exit
-        ssh_err=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes \
-            "$servidor" exit 2>&1) && ssh_exit=0 || ssh_exit=$?
+        gum style --foreground "$C_OK" "✓ $papel: localhost"
+        return 0
+    fi
 
-        if [ $ssh_exit -ne 0 ]; then
-            echo ""
-            gum style --foreground "$C_ERR" "✗ Falha na conexão SSH — $papel: $servidor"
-            gum style --foreground "$C_DIM" "$ssh_err"
-            echo "" && read -r -p "Pressione ENTER para sair..."
-            exit 1
-        fi
+    local ssh_err ssh_exit
+    ssh_err=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes \
+        "$servidor" exit 2>&1) && ssh_exit=0 || ssh_exit=$?
 
-        local docker_ok=false
+    if [ $ssh_exit -ne 0 ]; then
+        echo ""
+        gum style --foreground "$C_ERR" "✗ Falha na conexão SSH — $papel: $servidor"
+        gum style --foreground "$C_DIM" "$ssh_err"
+        echo "" && read -r -p "Pressione ENTER para sair..."
+        exit 1
+    fi
+
+    local docker_ok=false
+    ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" \
+        "docker info" &>/dev/null && docker_ok=true
+    if ! $docker_ok; then
         ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" \
-            "docker info" &>/dev/null && docker_ok=true
-        if ! $docker_ok; then
-            ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$servidor" \
-                "sudo docker info" &>/dev/null && docker_ok=true
-        fi
-        if ! $docker_ok; then
-            echo ""
-            gum style --foreground "$C_ERR" "✗ Docker não acessível em $servidor"
-            echo "" && read -r -p "Pressione ENTER para sair..."
-            exit 1
-        fi
+            "sudo docker info" &>/dev/null && docker_ok=true
+    fi
+    if ! $docker_ok; then
+        echo ""
+        gum style --foreground "$C_ERR" "✗ Docker não acessível em $servidor"
+        echo "" && read -r -p "Pressione ENTER para sair..."
+        exit 1
     fi
 
     gum style --foreground "$C_OK" "✓ $papel: $servidor"
@@ -152,14 +146,16 @@ testar_conexao() {
 
 echo ""
 gum style --foreground "$C_TITLE" --bold "Testando conectividade..."
-gum spin --spinner dot --title " Verificando $ORIGEM..." -- \
-    bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$ORIGEM' exit 2>/dev/null || [ '$ORIGEM' = 'localhost' ]" \
-    2>/dev/null || true
+[ "$ORIGEM" != "localhost" ] && \
+    gum spin --spinner dot --title " Verificando $ORIGEM..." -- \
+        bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$ORIGEM' exit 2>/dev/null" \
+        2>/dev/null || true
 testar_conexao "$ORIGEM" "Origem"
 
-gum spin --spinner dot --title " Verificando $DESTINO..." -- \
-    bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$DESTINO' exit 2>/dev/null || [ '$DESTINO' = 'localhost' ]" \
-    2>/dev/null || true
+[ "$DESTINO" != "localhost" ] && \
+    gum spin --spinner dot --title " Verificando $DESTINO..." -- \
+        bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$DESTINO' exit 2>/dev/null" \
+        2>/dev/null || true
 testar_conexao "$DESTINO" "Destino"
 
 # ─── Carregar volumes ─────────────────────────────────────────────────────────
