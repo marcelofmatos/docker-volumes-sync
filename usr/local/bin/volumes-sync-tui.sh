@@ -127,12 +127,12 @@ testar_conexao() {
 }
 
 echo ""
-[ "$ORIGEM"  != "localhost" ] && gum spin --spinner dot --title " Verificando $ORIGEM..."  -- \
+[ "$ORIGEM"  != "localhost" ] && gum spin --spinner dot --title " Testando conexão SSH com $ORIGEM..."  -- \
     bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$ORIGEM' exit" \
     2>/dev/null || true
 testar_conexao "$ORIGEM" "Origem"
 
-[ "$DESTINO" != "localhost" ] && gum spin --spinner dot --title " Verificando $DESTINO..." -- \
+[ "$DESTINO" != "localhost" ] && gum spin --spinner dot --title " Testando conexão SSH com $DESTINO..." -- \
     bash -c "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes '$DESTINO' exit" \
     2>/dev/null || true
 testar_conexao "$DESTINO" "Destino"
@@ -280,14 +280,13 @@ sync_volume() {
 
     cat > "$TMPSCRIPT" <<EOF
 #!/bin/bash
-eval "$RSYNC_CMD" > "$TMPLOG" 2>&1
+eval "$RSYNC_CMD" 2>"$TMPLOG"
 EOF
     chmod +x "$TMPSCRIPT"
 
     local spin_title=" $label$($DRY_RUN && echo ' — dry-run...' || echo ' — sincronizando...')"
-    if gum spin --spinner dot --title "$spin_title" -- bash "$TMPSCRIPT"; then
+    if gum spin --spinner dot --show-output --title "$spin_title" -- bash "$TMPSCRIPT"; then
         gum style --foreground "$C_OK" "  ✓ $label"
-        $VERBOSE && gum style --foreground "$C_DIM" "$(cat "$TMPLOG")" || true
         return 0
     else
         gum style --foreground "$C_ERR" "  ✗ $label"
