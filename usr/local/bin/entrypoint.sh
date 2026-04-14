@@ -32,4 +32,17 @@ if [ "${SSH_STRICT_HOST_CHECKING:-true}" = "false" ]; then
     fi
 fi
 
+# Normalizar permissões SSH
+# Volumes montados como read-only não permitem chmod direto.
+# Copia .ssh para /tmp/.ssh, corrige permissões e redefine HOME.
+if [ -d /root/.ssh ]; then
+    cp -r /root/.ssh /tmp/.ssh
+    chmod 700 /tmp/.ssh
+    find /tmp/.ssh -type f -name "id_*" ! -name "*.pub" -exec chmod 600 {} \; 2>/dev/null || true
+    find /tmp/.ssh -type f -name "*.pub"                 -exec chmod 644 {} \; 2>/dev/null || true
+    find /tmp/.ssh -type f -name "config"                -exec chmod 600 {} \; 2>/dev/null || true
+    find /tmp/.ssh -type f -name "known_hosts"           -exec chmod 644 {} \; 2>/dev/null || true
+    export HOME=/tmp
+fi
+
 exec "$@"

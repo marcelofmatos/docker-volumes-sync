@@ -30,35 +30,37 @@ docker pull ghcr.io/marcelofmatos/docker-volumes-sync:latest
 
 ### volumes-sync-tui.sh (padrão)
 
+A forma mais simples é montar o diretório `~/.ssh` do host — todas as chaves, aliases e `known_hosts` ficam disponíveis automaticamente:
+
 ```bash
 # Modo totalmente interativo
 docker run -it --rm \
-  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
-  -e SSH_CONFIG="$(cat ~/.ssh/config)" \
+  -v ~/.ssh:/root/.ssh:ro \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 
 # Definir servidores por variável de ambiente
 docker run -it --rm \
-  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -v ~/.ssh:/root/.ssh:ro \
   -e ORIGEM=usuario@azure \
   -e DESTINO=usuario@hetzner \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 
 # Execução real (desativa dry-run)
 docker run -it --rm \
-  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -v ~/.ssh:/root/.ssh:ro \
   -e ORIGEM=usuario@azure \
   -e DESTINO=usuario@hetzner \
   -e DRY_RUN=false \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
+> O entrypoint copia o `.ssh` para um diretório temporário gravável e corrige as permissões automaticamente, independente do tipo de chave (`id_ed25519`, `id_rsa`, `id_ecdsa`, etc.).
+
 ### volumes-sync.sh
 
 ```bash
 docker run -it --rm \
-  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
-  -e SSH_CONFIG="$(cat ~/.ssh/config)" \
+  -v ~/.ssh:/root/.ssh:ro \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest \
   /usr/local/bin/volumes-sync.sh
 ```
@@ -68,7 +70,7 @@ docker run -it --rm \
 ```bash
 # Volumes de um servidor remoto
 docker run -it --rm \
-  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)" \
+  -v ~/.ssh:/root/.ssh:ro \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest \
   /usr/local/bin/volumes-export.sh usuario@servidor
 
@@ -85,10 +87,9 @@ Quando `ORIGEM` ou `DESTINO` for o próprio host que executa o container, monte 
 
 ```bash
 docker run -it --rm \
+  -v ~/.ssh:/root/.ssh:ro \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/lib/docker/volumes:/var/lib/docker/volumes \
-  -v ~/.ssh/config:/root/.ssh/config:ro \
-  -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
   -e ORIGEM=localhost \
   -e DESTINO=usuario@hetzner \
   -e USE_SUDO=false \
@@ -99,30 +100,18 @@ O mount de `/var/lib/docker/volumes` é necessário para que o `rsync` acesse os
 
 > Use `USE_SUDO=false` — com o socket e o diretório de volumes montados, o container acessa o Docker e os dados diretamente sem necessidade de sudo.
 
-### Alternativa: montar o diretório SSH
+### Alternativa: variáveis de ambiente
 
-Em vez de passar as chaves por variável de ambiente, monte `~/.ssh` diretamente:
+Para passar a chave sem montar o diretório SSH:
 
 ```bash
 docker run -it --rm \
-  -v ~/.ssh:/root/.ssh:ro \
+  -e SSH_PRIVATE_KEY="$(cat ~/.ssh/id_ed25519)" \
+  -e SSH_CONFIG="$(cat ~/.ssh/config)" \
   -e ORIGEM=usuario@azure \
   -e DESTINO=usuario@hetzner \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
-
-Para aproveitar apenas o `~/.ssh/config` existente (aliases, opções por host) sem expor a chave privada via variável de ambiente:
-
-```bash
-docker run -it --rm \
-  -v ~/.ssh/config:/root/.ssh/config:ro \
-  -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
-  -e ORIGEM=azure \
-  -e DESTINO=hetzner \
-  ghcr.io/marcelofmatos/docker-volumes-sync:latest
-```
-
-> Os aliases definidos em `~/.ssh/config` ficam disponíveis no menu interativo do script.
 
 ---
 
@@ -132,7 +121,7 @@ docker run -it --rm \
 
 | Variável | Descrição |
 |----------|-----------|
-| `SSH_PRIVATE_KEY` | Conteúdo da chave privada SSH (gravado em `/root/.ssh/id_rsa`) |
+| `SSH_PRIVATE_KEY` | Conteúdo da chave privada SSH (gravado em `/root/.ssh/id_ed25519`) |
 | `SSH_CONFIG` | Conteúdo do arquivo `~/.ssh/config` |
 | `SSH_KNOWN_HOSTS` | Conteúdo do arquivo `known_hosts` |
 | `SSH_STRICT_HOST_CHECKING` | `false` para desabilitar verificação de host (padrão: `true`) |
