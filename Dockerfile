@@ -14,4 +14,4 @@ COPY usr /usr
 RUN chmod +x /usr/local/bin/*
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["/usr/local/bin/volumes-sync.sh"]
+CMD ["/usr/local/bin/volumes-sync-tui.sh"]
