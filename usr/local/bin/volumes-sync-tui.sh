@@ -296,8 +296,8 @@ eval "$RSYNC_CMD" 2>"$TMPLOG"
 EOF
     chmod +x "$TMPSCRIPT"
 
-    local spin_title=" $label$($DRY_RUN && echo ' — dry-run...' || echo ' — sincronizando...')"
-    if gum spin --spinner dot --show-output --title "$spin_title" -- bash "$TMPSCRIPT"; then
+    gum style --foreground "$C_DIM" "$($DRY_RUN && echo "  ~ $label — dry-run..." || echo "  → $label — sincronizando...")"
+    if bash "$TMPSCRIPT"; then
         gum style --foreground "$C_OK" "  ✓ $label"
         return 0
     else
