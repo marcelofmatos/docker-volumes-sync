@@ -107,6 +107,19 @@ docker run -it --rm \
   ghcr.io/marcelofmatos/docker-volumes-sync:latest
 ```
 
+Para aproveitar apenas o `~/.ssh/config` existente (aliases, opções por host) sem expor a chave privada via variável de ambiente:
+
+```bash
+docker run -it --rm \
+  -v ~/.ssh/config:/root/.ssh/config:ro \
+  -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
+  -e ORIGEM=azure \
+  -e DESTINO=hetzner \
+  ghcr.io/marcelofmatos/docker-volumes-sync:latest
+```
+
+> Os aliases definidos em `~/.ssh/config` ficam disponíveis no menu interativo do script.
+
 ---
 
 ## Variáveis de ambiente
