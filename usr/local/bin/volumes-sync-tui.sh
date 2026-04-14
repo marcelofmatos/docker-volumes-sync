@@ -52,9 +52,10 @@ selecionar_servidor() {
     fi
     OPCOES+=("Digitar manualmente...")
 
-    gum style --foreground "$C_TITLE" --bold "$titulo"
     local ESCOLHA
     ESCOLHA=$(printf '%s\n' "${OPCOES[@]}" | gum choose \
+        --header "$titulo" \
+        --header.foreground "$C_TITLE" \
         --cursor.foreground "$C_TITLE" \
         --item.foreground "" \
         --selected.foreground "$C_OK")
